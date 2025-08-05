@@ -1,0 +1,14 @@
+# 忽略所有 .log 檔
+*.log
+
+# 忽略某個資料夾
+build/
+
+# 忽略特定檔案
+secret.txt
+
+# 忽略 __pycache__ 資料夾
+__pycache__/
+
+# 忽略 .env 環境變數檔
+.env

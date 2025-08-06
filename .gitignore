@@ -4,6 +4,10 @@
 # 忽略某個資料夾
 build/
 output/
+ros2_ws/install/
+ros2_ws/build/
+ros2_ws/log/
+
 
 # 忽略特定檔案
 secret.txt

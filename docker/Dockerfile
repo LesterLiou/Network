@@ -14,9 +14,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     xauth x11-utils x11-xserver-utils \
     tcpdump traceroute dnsutils \
     git curl unzip \
+    tzdata \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN pip3 install --no-cache-dir flent matplotlib numpy pandas
+
+# ======================== time zone ========================
+RUN ln -sf /usr/share/zoneinfo/Asia/Taipei /etc/localtime && \
+    echo "Asia/Taipei" > /etc/timezone
 
 ##################### ROS2 Key #####################
 RUN apt-key del F42ED6FBAB17C654 || true && \

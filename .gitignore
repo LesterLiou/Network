@@ -3,6 +3,7 @@
 
 # 忽略某個資料夾
 build/
+output/
 
 # 忽略特定檔案
 secret.txt

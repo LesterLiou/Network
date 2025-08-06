@@ -15,3 +15,5 @@ docker run -it --rm \
 
 # 移除本地 X11 權限（安全性）
 xhost -local:root
+
+

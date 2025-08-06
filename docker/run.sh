@@ -1,6 +1,7 @@
 #!/bin/bash
 
 IMAGE_NAME=flent_network
+CONTAINER_NAME=flent_network_container
 
 # 允許 X11 顯示畫面
 xhost +local:root

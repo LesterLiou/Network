@@ -9,7 +9,7 @@ duration_sec = 10  # 5 minutes
 
 # --------- 建立時間標記與 output 資料夾 ---------
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-output_dir = os.path.join("/../output", timestamp)
+output_dir = os.path.join("/root/NETWORK/output", timestamp)
 os.makedirs(output_dir, exist_ok=True)
 
 # --------- 開始記錄時間 ---------

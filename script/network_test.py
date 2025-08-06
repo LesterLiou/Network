@@ -6,7 +6,7 @@ from datetime import datetime
 # --------- 設定參數 ---------
 target_ip = "192.168.0.230"
 duration_sec = 5  # 測試時間（秒）
-background_load = "B"  # A: 無負載, B: 5-10 Mbps, C: 120 Mbps
+background_load = "A"  # A: 無負載, B: 5-10 Mbps, C: 120 Mbps
 
 # --------- 建立時間標記與 output 資料夾 ---------
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")

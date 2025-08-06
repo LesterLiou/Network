@@ -42,11 +42,11 @@ RUN apt-get update && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 ##################### 建立工作空間 #####################
-WORKDIR /root/ros2_ws
+WORKDIR /root/NETWORK/ros2_ws
 RUN mkdir -p src
 RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc && \
-    echo "source /root/ros2_ws/install/setup.bash" >> ~/.bashrc \
-    echo 'alias r="cd /root/ros2_ws && colcon build && source install/setup.bash"' >> /root/.bashrc
+    echo "source /root/NETWORK/ros2_ws/install/setup.bash" >> ~/.bashrc && \
+    echo 'alias r="cd /root/NETWORK/ros2_ws && colcon build && source install/setup.bash"' >> /root/.bashrc
 
 
 CMD ["bash"]

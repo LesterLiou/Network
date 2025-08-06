@@ -53,5 +53,10 @@ RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc && \
     echo "source /root/NETWORK/ros2_ws/install/setup.bash" >> ~/.bashrc && \
     echo 'alias r="cd /root/NETWORK/ros2_ws && colcon build && source install/setup.bash"' >> /root/.bashrc
 
+##################### 補充 #####################
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    mtr && \
+    rm -rf /var/lib/apt/lists/*
 
 CMD ["bash"]

@@ -1,4 +1,4 @@
-# Difference between TCP, UDP, and PING
+# Difference between PING, TCP, and UDP
 
 This document provides a basic overview of three essential network protocols/tools used for communication and diagnostics: **TCP**, **UDP**, and **PING**.
 

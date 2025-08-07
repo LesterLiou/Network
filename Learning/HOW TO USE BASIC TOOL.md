@@ -58,7 +58,7 @@ iperf3 -c 192.168.0.230 -u -b 10M -t 15
 
 ## 3. OUTPUT
 
-### ( 1 ) PING
+### (1) PING
 - Example
 ```lua
 64 bytes from 192.168.0.230: icmp_seq=1 ttl=64 time=0.195 ms
@@ -108,7 +108,7 @@ rtt min/avg/max/mdev = 0.187/0.201/0.231/0.015 ms
 -Bitrate            # Bandwidth per second (may vary due to UDP characteristics)
 -Total Datagrams    # Number of packets sent in the interval
 ```
-### (4) How to Choose
+## 4. How to Choose
 | Tool         | Focus                  | Key Interpretation                                        |
 | ------------ | ---------------------- | --------------------------------------------------------- |
 | `ping`       | Latency/Stability      | Look at RTT average and packet loss                       |

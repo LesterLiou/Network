@@ -1,10 +1,10 @@
 """
-network_test_syn.py  ── 並行測試模式
+network_test_syn.py  
 --------------------------------------------------
 同時啟動：
  1. Ping RTT (interval=0.2s)
- 2. iperf3 TCP 吞吐
- 3. iperf3 UDP 吞吐 (若 --udp)
+ 2. iperf3 TCP 
+ 3. iperf3 UDP (if --udp)
  4. mtr 逐跳延遲 + routing (JSON)
 --------------------------------------------------
 最後：
@@ -26,8 +26,6 @@ from pathlib import Path
 from subprocess import Popen, STDOUT
 import psutil
 import matplotlib.pyplot as plt
-
-
 
 def io_stats():
     if psutil:

@@ -40,9 +40,13 @@ iperf3 -c <Server-IP>
 ###  # Parameters
 ```bash
 -t <seconds>        # Duration of the test (default: 10)
+-n, 	            #以傳送固定封包數取代依時間傳送（不考慮 -t）。
 -u                  # Use UDP instead of TCP
--b <rate>           # Bandwidth for UDP mode (e.g., 10M, 100M)
 -p <port>           # Custom port (default: 5201)
+-R, --reverse	    #反向測試：server 端送，client 端接。
+-b, --bandwidth
+# UDP：直接設定欲測試的固定帶寬（CBR）。
+# TCP：限制每條 stream 的速率，可用來模擬「目標 throughput」。
 ```
 ### # Example 
 ####  1. TCP

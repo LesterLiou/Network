@@ -1,6 +1,17 @@
+"""
+ros2 run network_tester network_test \
+  --ros-args \
+  -p target:=<ip> \
+  -p duration:=15 \
+  -p load:=B \
+  -p out:=\"../output\"
+
+"""
 import rclpy
 from rclpy.node import Node
-import time, json, csv
+import time
+import json
+import csv
 from datetime import datetime
 from pathlib import Path
 from subprocess import Popen, STDOUT, DEVNULL
@@ -11,9 +22,9 @@ import matplotlib.pyplot as plt
 def io_stats():
     if psutil:
         return psutil.net_io_counters()._asdict()
-    stats = {'bytes_recv': 0, 'packets_recv': 0, 'dropin': 0,
-             'bytes_sent': 0, 'packets_sent': 0, 'dropout': 0}
-    with open('/proc/net/dev') as f:
+    stats = dict(bytes_recv=0, packets_recv=0, dropin=0,
+                 bytes_sent=0, packets_sent=0, dropout=0)
+    with open("/proc/net/dev") as f:
         for line in f.readlines()[2:]:
             p = line.split()
             stats['bytes_recv']   += int(p[1])
@@ -25,175 +36,198 @@ def io_stats():
     return stats
 
 
-def launch_background_load(target_ip: str, load: str):
-    if load == 'B':  # 5–10 Mbps
-        return Popen(['iperf3', '-c', target_ip, '-u', '-b', '8M', '-t', '300', '-p', '5002'],
-                     stdout=DEVNULL, stderr=DEVNULL)
-    elif load == 'C':  # 120 Mbps
-        return Popen(['iperf3', '-c', target_ip, '-u', '-b', '120M', '-t', '300', '-p', '5002'],
-                     stdout=DEVNULL, stderr=DEVNULL)
-    return None
-
-
-def plot_summary(data_dir: Path, rtt_data: list):
-    png = data_dir / 'summary_plot.png'
-    plt.figure(figsize=(10, 5))
-    plt.plot(rtt_data, label='RTT (ms)')
-    plt.xlabel('Samples')
-    plt.ylabel('RTT (ms)')
-    plt.title('RTT Over Time')
-    plt.legend()
-    plt.grid(True)
-    plt.savefig(png)
-    return png
-
-
-def extract_ping_rtt(ping_file: Path) -> list:
-    rtts = []
-    with open(ping_file) as f:
-        for line in f:
-            if 'time=' in line:
-                try:
-                    rtts.append(float(line.split('time=')[1].split()[0]))
-                except ValueError:
-                    pass
-    return rtts
-
-
-def append_to_csv(csv_path: Path, row: dict, headers: list):
+def append_to_csv(csv_path, row, headers):
     write_header = not csv_path.exists()
-    with open(csv_path, 'a', newline='') as f:
+    with open(csv_path, "a", newline='') as f:
         writer = csv.DictWriter(f, fieldnames=headers)
         if write_header:
             writer.writeheader()
         writer.writerow(row)
 
 
-class NetworkTester(Node):
+class NetworkTestNode(Node):
     def __init__(self):
-        super().__init__('network_tester')
-        # Declare ROS parameters
-        self.declare_parameter('target', '192.168.0.230')
-        self.declare_parameter('duration', 10)
-        self.declare_parameter('udp', False)
+        super().__init__('network_test')
+        # Declare ROS2 parameters
+        self.declare_parameter('target', '--')
+        self.declare_parameter('duration', 15)
         self.declare_parameter('load', 'A')
         self.declare_parameter('out', '../output')
 
         # Read parameters
-        self.target   = self.get_parameter('target').get_parameter_value().string_value
+        self.target = self.get_parameter('target').get_parameter_value().string_value
         self.duration = self.get_parameter('duration').get_parameter_value().integer_value
-        self.udp      = self.get_parameter('udp').get_parameter_value().bool_value
-        self.load     = self.get_parameter('load').get_parameter_value().string_value
-        self.out_dir  = self.get_parameter('out').get_parameter_value().string_value
+        self.load = self.get_parameter('load').get_parameter_value().string_value
+        self.out_dir = self.get_parameter('out').get_parameter_value().string_value
 
     def run(self):
-        ts = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        # Map load to streams & bandwidth
+        load_map = {
+            'A': {'streams': 1, 'bandwidth': '0'},
+            'B': {'streams': 5, 'bandwidth': '2M'},
+            'C': {'streams': 5, 'bandwidth': '24M'},
+        }
+        cfg = load_map.get(self.load, load_map['A'])
+
+        ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         base = Path(self.out_dir) / ts
         base.mkdir(parents=True, exist_ok=True)
 
-        meta = {'target': self.target, 'duration': self.duration, 'timestamp': ts}
+        start_time = time.time()
+        meta = {
+            'target': self.target,
+            'duration': self.duration,
+            'load': self.load,
+            'timestamp': ts
+        }
         meta['net_before'] = io_stats()
 
-        bg_proc = launch_background_load(self.target, self.load)
         procs = []
-
         # 1. Ping
-        cnt = self.duration * 5
-        ping_f = base / f'ping_{ts}.txt'
-        ping_out = open(ping_f, 'w')
-        procs.append(('ping', ping_f,
-                      Popen(['ping', '-i', '0.2', '-c', str(cnt), self.target],
-                            stdout=ping_out, stderr=STDOUT)))
-        meta['ping_file'] = str(ping_f)
+        count = self.duration * 5
+        ping_f = base / f"ping_{ts}.txt"
+        p = Popen([
+            'ping', '-i', '0.2', '-c', str(count), self.target
+        ], stdout=open(ping_f, 'w'), stderr=STDOUT)
+        procs.append(('ping', ping_f, p))
 
         # 2. iperf3 TCP
-        iperf_tcp_f = base / f'iperf_tcp_{ts}.txt'
-        iperf_tcp_out = open(iperf_tcp_f, 'w')
-        procs.append(('iperf_tcp', iperf_tcp_f,
-                      Popen(['iperf3', '-c', self.target, '-t', str(self.duration)],
-                            stdout=iperf_tcp_out, stderr=STDOUT)))
-        meta['iperf_tcp'] = str(iperf_tcp_f)
+        iperf_f = base / f"iperf_tcp_{ts}.json"
+        cmd = [
+            'iperf3', '-c', self.target,
+            '-t', str(self.duration),
+            '-P', str(cfg['streams']),
+            '-b', cfg['bandwidth'],
+            '-J'
+        ]
+        p = Popen(cmd, stdout=open(iperf_f, 'w'), stderr=STDOUT)
+        procs.append(('iperf_tcp', iperf_f, p))
 
-        # 3. iperf3 UDP (optional)
-        if self.udp:
-            iperf_udp_f = base / f'iperf_udp_{ts}.txt'
-            iperf_udp_out = open(iperf_udp_f, 'w')
-            procs.append(('iperf_udp', iperf_udp_f,
-                          Popen(['iperf3', '-u', '-b', '0', '-c', self.target, '-t', str(self.duration), '-p', '5002'],
-                                stdout=iperf_udp_out, stderr=STDOUT)))
-            meta['iperf_udp'] = str(iperf_udp_f)
+        # 3. MTR
+        mtr_f = base / f"mtr_{ts}.json"
+        p = Popen([
+            'mtr', '-rwzc', '10', '-j', self.target
+        ], stdout=open(mtr_f, 'w'), stderr=STDOUT)
+        procs.append(('mtr', mtr_f, p))
 
-        # 4. mtr
-        mtr_f = base / f'mtr_{ts}.json'
-        mtr_out = open(mtr_f, 'w')
-        procs.append(('mtr', mtr_f,
-                      Popen(['mtr', '-rwzc', '10', '-j', self.target],
-                            stdout=mtr_out, stderr=STDOUT)))
-        meta['mtr_file'] = str(mtr_f)
-
-        # Wait for all
-        for name, fpath, proc in procs:
+        # Wait all
+        for _, _, proc in procs:
             proc.wait()
-            try:
-                proc.stdout.close()
-            except Exception:
-                pass
+        end_time = time.time()
 
-        # RX/TX after
-        meta['net_after'] = io_stats()
+        # Post process
+        net_after = io_stats()
+        rx = net_after['bytes_recv'] - meta['net_before']['bytes_recv']
+        tx = net_after['bytes_sent'] - meta['net_before']['bytes_sent']
 
-        # Flent RRUL plot
-        rrul_base = base / f'rrul_{ts}'
-        flent_cmd = [
+        # Parse ping
+        rtts = []
+        with open(ping_f) as f:
+            for line in f:
+                if 'time=' in line:
+                    try:
+                        rtts.append(float(line.split('time=')[1].split()[0]))
+                    except:
+                        pass
+        received = len(rtts)
+        loss = round((count - received) / count * 100, 2)
+        meta['rtt_avg_ms'] = round(sum(rtts)/len(rtts), 2) if rtts else None
+        meta['packet_loss%'] = loss
+        meta['bufferbloat_ms'] = round(max(rtts)-min(rtts), 2) if rtts else None
+
+        # Parse MTR
+        try:
+            mj = json.load(open(mtr_f))
+            hubs = mj['report']['hubs']
+            meta['route'] = [h['host'] for h in hubs]
+            meta['step_latencies_ms'] = [h['Last'] for h in hubs]
+        except:
+            meta['route'] = []
+            meta['step_latencies_ms'] = []
+
+        # Parse iperf
+        try:
+            ij = json.load(open(iperf_f))
+            mbps = ij['end']['sum_received']['bits_per_second'] / 1e6
+            meta['bandwidth_Mbps'] = round(mbps, 2)
+            intervals = ij.get('intervals', [])
+        except:
+            meta['bandwidth_Mbps'] = None
+            intervals = []
+
+        meta['rx_MB'] = round(rx/1024/1024, 2)
+        meta['tx_MB'] = round(tx/1024/1024, 2)
+        meta['completion_sec'] = round(end_time - start_time, 2)
+
+        # Flent
+        rr = base / f"rrul_{ts}"
+        Popen([
             'flent', 'rrul',
             '-p', 'all_scaled', '-l', str(self.duration),
             '-s', '0.2', '--socket-stats',
             '-H', self.target,
-            '-o', str(rrul_base) + '.png'
-        ]
-        Popen(flent_cmd).wait()
-        gz = Path(str(rrul_base) + '.flent.gz')
-        if gz.exists():
-            gz.rename(base / gz.name)
-            meta['flent_gz'] = str(base / gz.name)
-        meta['flent_plot'] = str(rrul_base) + '.png'
+            '-o', str(rr) + '.png'
+        ]).wait()
+        meta['flent_plot'] = str(rr) + '.png'
 
-        # Completion and meta write
-        meta['completion_sec'] = round(
-            time.time() - time.mktime(datetime.strptime(ts, '%Y-%m-%d_%H-%M-%S').timetuple()), 2)
+        # Plot charts
+        if rtts:
+            # RTT
+            plt.figure(figsize=(8,4))
+            plt.plot(rtts, label='RTT (ms)')
+            plt.xlabel('Sample'); plt.ylabel('RTT (ms)')
+            plt.title('Ping RTT Over Time'); plt.grid(); plt.legend()
+            f = base / 'chart_rtt.png'; plt.savefig(f); plt.close(); meta['chart_rtt'] = str(f)
+            # Jitter
+            jitter = [abs(rtts[i]-rtts[i-1]) for i in range(1,len(rtts))]
+            plt.figure(figsize=(8,4))
+            plt.plot(range(1,len(rtts)), jitter, label='Jitter (ms)')
+            plt.xlabel('Sample'); plt.ylabel('Jitter (ms)')
+            plt.title('RTT Jitter Over Time'); plt.grid(); plt.legend()
+            f = base / 'chart_jitter.png'; plt.savefig(f); plt.close(); meta['chart_jitter']=str(f)
+        if intervals:
+            times = [(i['sum']['start']+i['sum']['end'])/2 for i in intervals]
+            tps = [i['sum']['bits_per_second']/1e6 for i in intervals]
+            plt.figure(figsize=(8,4))
+            plt.plot(times, tps, label='Throughput (Mbps)')
+            plt.xlabel('Time (s)'); plt.ylabel('Throughput (Mbps)')
+            plt.title('TCP Throughput Over Time'); plt.grid(); plt.legend()
+            f = base / 'chart_throughput.png'; plt.savefig(f); plt.close(); meta['chart_throughput'] = str(f)
+        hops = meta.get('route', []); lats = meta.get('step_latencies_ms', [])
+        if hops and lats:
+            plt.figure(figsize=(10,5))
+            plt.plot(lats, marker='o'); plt.xticks(range(len(hops)), hops, rotation=45)
+            plt.xlabel('Hop'); plt.ylabel('Latency (ms)')
+            plt.title('Step-wise Latency per Hop'); plt.grid()
+            f = base / 'chart_mtr.png'; plt.tight_layout(); plt.savefig(f); plt.close(); meta['chart_mtr'] = str(f)
+            meta['mtr_start_ms'] = lats[0]; meta['mtr_end_ms'] = lats[-1]
+            meta['mtr_diff_ms'] = round(lats[-1]-lats[0],2)
+
+        # Save meta
         (base / f'meta_{ts}.json').write_text(json.dumps(meta, indent=2))
-
-        if bg_proc:
-            bg_proc.terminate()
-
-        # RTT average and summary plot
-        rtt_list = extract_ping_rtt(ping_f)
-        meta['rtt_avg'] = round(sum(rtt_list) / len(rtt_list), 2) if rtt_list else None
-        plot_summary(base, rtt_list)
-
-        # Append to summary.csv
+        # Update summary.csv
         summary_csv = Path(self.out_dir) / 'summary.csv'
-        append_to_csv(summary_csv, {
+        row = {
             'timestamp': ts,
             'target': self.target,
-            'duration': self.duration,
             'load': self.load,
-            'rtt_avg': meta['rtt_avg'],
-            'rx_MB': round((meta['net_after']['bytes_recv'] - meta['net_before']['bytes_recv']) / 1024 / 1024, 2),
-            'tx_MB': round((meta['net_after']['bytes_sent'] - meta['net_before']['bytes_sent']) / 1024 / 1024, 2),
-            'completion_sec': meta['completion_sec'],
-            'plot': meta['flent_plot']
-        }, headers=[
-            'timestamp', 'target', 'duration', 'load', 'rtt_avg',
-            'rx_MB', 'tx_MB', 'completion_sec', 'plot'
-        ])
+            'rtt_avg': meta.get('rtt_avg_ms'),
+            'loss_%': meta.get('packet_loss%'),
+            'bw_Mbps': meta.get('bandwidth_Mbps'),
+            'rx_MB': meta.get('rx_MB'),
+            'tx_MB': meta.get('tx_MB'),
+            'bufferbloat_ms': meta.get('bufferbloat_ms'),
+            'completion_s': meta.get('completion_sec'),
+            'mtr_diff_ms': meta.get('mtr_diff_ms')
+        }
+        append_to_csv(summary_csv, row, list(row.keys()))
 
         self.get_logger().info(f"✅ All done. Results in: {base}")
 
 
 def main(args=None):
     rclpy.init(args=args)
-    node = NetworkTester()
+    node = NetworkTestNode()
     node.run()
     rclpy.shutdown()
 

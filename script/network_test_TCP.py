@@ -139,7 +139,6 @@ def main():
                     pass
     received = len(rtts)
     loss = round((cnt - received) / cnt * 100, 2)
-    meta['rtt_list'] = rtts
     meta['rtt_avg_ms'] = round(sum(rtts)/len(rtts),2) if rtts else None
     meta['packet_loss%'] = loss
     meta['bufferbloat_ms'] = round(max(rtts)-min(rtts),2) if rtts else None

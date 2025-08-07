@@ -59,4 +59,6 @@ RUN apt-get update && \
     mtr && \
     rm -rf /var/lib/apt/lists/*
 
+RUN pip3 install --no-cache-dir pyqt5 qtpy
+
 CMD ["bash"]

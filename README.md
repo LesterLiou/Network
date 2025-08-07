@@ -14,7 +14,7 @@
             └── network_tester_node.py  
 ```
 
-## ⚙️ Development Environment
+## Development Environment
 - ROS 2 Humble
 - Ubuntu 22.04
 - Python 3.10
@@ -44,25 +44,31 @@ r     #same with colcon build
 
 ### network test ###
 
-ros2 run network_tester network_tester \
+ros2 run network_tester network_test \
   --ros-args \
-    -p target:= <ip> \
-    -p duration:=15 \ 
-    -p udp:=True \
-    -p load:=B \
-    -p out:="../output"
+  -p target:=<ip> \
+  -p duration:=15 \
+  -p load:=B \
+  -p out:=\"../output\"
 ```
-### 4. Output
-```
+## Output
+```bash
 output/time_stamp/
-        ├── ping_*.txt            # Ping RTT log
-        ├── iperf_tcp_*.txt       # TCP throughput log
-        ├── iperf_udp_*.txt       # UDP throughput log (if --udp)
+        ├── chart_jitter*.png            
+        ├── chart_mtr*.png            
+        ├── chart_rtt*.png            
+        ├── chart_throughput*.png                     
+        ├── iperf_tcp_*.json       # TCP throughput log
+        ├── ping_*.txt            # Ping RTT log      
         ├── mtr_*.json            # Multi-hop route trace
-        ├── summary_plot.png      # RTT over time
         ├── rrul_*.png            # Flent RRUL bufferbloat graph
+        ├── rrul_*.flent.gz       # Flent RRUL data
         ├── meta_*.json           # Test config & stats
         └── summary.csv           # Cumulative summary of all runs
+```
+### Open flent GUI 
+```bash
+flent --gui rrul-<data_name>.flent.gz
 ```
 
 

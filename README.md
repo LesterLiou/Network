@@ -22,24 +22,27 @@
 ## Quick Start
 
 ### 1. (Both Server & Client) Clone the repository and build the Docker image 
-```
+```bash
 git clone https://github.com/LesterLiou/Network.git
-cd Network/docker
+cd ~/Network/docker
 ./build.sh 
 ```
 ### 2. (Server) Open server
-```
-cd Network/docker
-./run.sh    #get into container
+```bash
+cd ~/NETWORK/docker
+./run.sh           #get into container
+cd ~/NETWORK
 ./run_server.sh    #turn on server and port
 ```
 ### 3.  (Client) Network Test
-```
-cd Network/docker
+```bash
+cd ~/NETWORK/docker
 ./run.sh    #get into container
 
+
 ### build ros2 ###
-cd ~/Network/ros2_ws
+
+cd ~/NETWORK/ros2_ws
 r     #same with colcon build
 
 ### network test ###

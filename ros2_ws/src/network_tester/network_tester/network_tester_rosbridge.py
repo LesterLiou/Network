@@ -10,13 +10,11 @@ Extra params for rosbridge mode:
   - ws_host: rosbridge host/IP (default 127.0.0.1)
   - ws_port: rosbridge port (default 9090)
 
-'types' 可用 ROS 2 風格 (sensor_msgs/msg/JointState)；
-rosbridge 會自動轉成 ROS 1 風格 (sensor_msgs/JointState)。
+'types'  (sensor_msgs/msg/JointState)；
 For CompressedImage, we decode base64 and use decoded bytes for Mbps.
 
-其餘功能：ping / iperf3 / mtr / flent 與原版相同。
 
-測 DDS（同 ROS_DOMAIN_ID / DDS 可互通）
+### DDS（ROS_DOMAIN_ID / DDS ）
 ros2 run network_tester network_rosbridge \
   --ros-args \
   -p target:=192.168.0.230 \
@@ -28,8 +26,7 @@ ros2 run network_tester network_rosbridge \
   -p bw_interval:=1
 
 
-
-測 rosbridge（WebSocket）
+### rosbridge（WebSocket）
 ros2 run network_tester network_rosbridge \
   --ros-args \
   -p target:=192.168.0.230 \

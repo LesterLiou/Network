@@ -12,5 +12,5 @@ set -u
 
 # 只開內網 rosbridge
 exec ros2 launch rosbridge_server rosbridge_websocket_launch.xml \
-  address:=192.168.0.5 port:=9090
+  address:=0.0.0.0 port:=9090
 

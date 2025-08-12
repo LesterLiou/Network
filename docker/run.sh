@@ -4,7 +4,7 @@ set -euo pipefail
 IMAGE_NAME=${IMAGE_NAME:-flent_network}
 CONTAINER_NAME=${CONTAINER_NAME:-flent_network_container}
 MODE=${1:-bash}
-ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-7}
+ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
 
 # ---- GUI 檢測（沒 DISPLAY 就略過）----
 HAS_X=0

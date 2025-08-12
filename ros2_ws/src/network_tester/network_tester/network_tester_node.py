@@ -4,7 +4,7 @@ ros2 run network_tester network_test \
   -p target:=<ip> \
   -p duration:=15 \
   -p load:=B \
-  -p out:=\"../output\"
+  -p out:=\"/root/NETWORK/output\"
 
 """
 import rclpy

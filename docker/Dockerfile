@@ -61,4 +61,22 @@ RUN apt-get update && \
 
 RUN pip3 install --no-cache-dir pyqt5 qtpy
 
+##################### rosbridge + 影像工具 #####################
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ros-humble-rosbridge-server \
+    ros-humble-image-transport-plugins \
+    ros-humble-image-view \
+    ros-humble-realsense2-camera && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# （選）若要在容器內也跑 WebSocket 客戶端
+RUN pip3 install --no-cache-dir roslibpy
+
+# 放入啟動腳本
+COPY start_rosbridge.sh /usr/local/bin/start_rosbridge.sh
+RUN chmod +x /usr/local/bin/start_rosbridge.sh
+
+# rosbridge WebSocket 預設埠
+EXPOSE 9090
+
 CMD ["bash"]

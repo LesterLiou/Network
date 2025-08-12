@@ -75,3 +75,10 @@ flent --gui rrul-<data_name>.flent.gz
 ```
 
 
+## TEST
+check the port
+```bash
+nc -zv -w 3 <SERVER_IP> 9090
+```
+
+

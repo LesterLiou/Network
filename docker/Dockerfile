@@ -79,4 +79,9 @@ RUN chmod +x /usr/local/bin/start_rosbridge.sh
 # rosbridge WebSocket 預設埠
 EXPOSE 9090
 
+###### 補充2 #####
+RUN apt-get update && \
+    apt-get install -y netcat-openbsd && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
 CMD ["bash"]

@@ -76,9 +76,11 @@ flent --gui rrul-<data_name>.flent.gz
 
 
 ## TEST
-check the port
+### Client : check the port
 ```bash
 nc -zv -w 3 <SERVER_IP> 9090
 ```
+## With Joint Command
+
 
 

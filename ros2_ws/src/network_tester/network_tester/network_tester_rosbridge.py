@@ -1,29 +1,23 @@
 #!/usr/bin/env python3
 """
-network_image.py — Unified ROS 2 network tester with per-topic bandwidth
------------------------------------------------------------------------
-Features:
- 1) Ping RTT sampling (0.2s) with stats & charts
- 2) iperf3 TCP throughput (JSON) with chart
- 3) MTR hop-by-hop latency (JSON) with chart
- 4) Flent RRUL plot (all_scaled)
- 5) System-level RX/TX delta from /proc/net/dev
- 6) **Per-topic ROS 2 bandwidth monitor** (Mbps/Hz/AvgBytes per window)
-    - Works for 1~N image streams + any other topics (e.g., JointState)
-    - Uses serialize_message(msg) to estimate payload size
- 7) Outputs: structured PNG charts, meta_<ts>.json, summary.csv, ros2_bw.csv
+network_image.py — Unified network tester with per-topic bandwidth
+Now supports BOTH:
+  (A) ROS 2 DDS subscriptions (rclpy)
+  (B) rosbridge WebSocket subscriptions (roslibpy)
 
-Parameters (ros2 --ros-args -p ...):
-  - target:      iperf3/Flent target host/IP
-  - duration:    total seconds to measure (affects ping/iperf/flent & spin)
-  - load:        A|B|C -> maps to iperf3 streams & bandwidth
-  - out:         base output directory
-  - topics:      comma list of topic names (e.g. "/cam1/image_raw,/cam2/image_raw,/joint_states")
-  - types:       comma list of type names  (e.g. "sensor_msgs/msg/Image,...,sensor_msgs/msg/JointState")
-  - bw_interval: window seconds for per-topic CSV aggregation (default 1)
+Extra params for rosbridge mode:
+  - use_rosbridge: 0|1 (default 0)
+  - ws_host: rosbridge host/IP (default 127.0.0.1)
+  - ws_port: rosbridge port (default 9090)
 
-Example:
-ros2 run network_tester network_image \
+'types' 可用 ROS 2 風格 (sensor_msgs/msg/JointState)；
+rosbridge 會自動轉成 ROS 1 風格 (sensor_msgs/JointState)。
+For CompressedImage, we decode base64 and use decoded bytes for Mbps.
+
+其餘功能：ping / iperf3 / mtr / flent 與原版相同。
+
+測 DDS（同 ROS_DOMAIN_ID / DDS 可互通）
+ros2 run network_tester network_rosbridge \
   --ros-args \
   -p target:=192.168.0.230 \
   -p duration:=15 \
@@ -33,18 +27,33 @@ ros2 run network_tester network_image \
   -p types:="sensor_msgs/msg/JointState" \
   -p bw_interval:=1
 
-Notes:
-- For CompressedImage streams, set the type to sensor_msgs/msg/CompressedImage
-  to reflect actual network footprint after compression.
-- QoS for sensors uses BEST_EFFORT by default here; adjust as needed.
-"""
 
+
+測 rosbridge（WebSocket）
+ros2 run network_tester network_rosbridge \
+  --ros-args \
+  -p target:=192.168.0.230 \
+  -p duration:=15 \
+  -p load:=B \
+  -p out:="/root/NETWORK/output" \
+  -p topics:="/left_follower/joint_states" \
+  -p types:="sensor_msgs/msg/JointState" \
+  -p bw_interval:=1 \
+  -p use_rosbridge:=1 \
+  -p ws_host:=192.168.0.230 \
+  -p ws_port:=9090
+
+"""
 import time
 import json
 import csv
+import base64
 from datetime import datetime
 from pathlib import Path
 from subprocess import Popen, STDOUT
+
+import psutil
+import matplotlib.pyplot as plt
 
 import rclpy
 from rclpy.node import Node
@@ -52,14 +61,17 @@ from rclpy.serialization import serialize_message
 from rclpy.qos import QoSProfile, ReliabilityPolicy
 from rosidl_runtime_py.utilities import get_message
 
-import psutil
-import matplotlib.pyplot as plt
+# rosbridge (lazy import; only used when enabled)
+try:
+    import roslibpy
+except Exception:
+    roslibpy = None
 
 
 def io_stats():
     if psutil:
         return psutil.net_io_counters()._asdict()
-    # Fallback (rarely used)
+    # Fallback
     stats = dict(bytes_recv=0, packets_recv=0, dropin=0,
                  bytes_sent=0, packets_sent=0, dropout=0)
     with open("/proc/net/dev") as f:
@@ -83,9 +95,15 @@ def append_to_csv(csv_path: Path, row: dict, headers: list[str]):
         writer.writerow(row)
 
 
+def ros2_to_ros1_type(t: str) -> str:
+    # "sensor_msgs/msg/JointState" -> "sensor_msgs/JointState"
+    return t.replace('/msg/', '/')
+
+
 class NetworkImageNode(Node):
     def __init__(self):
-        super().__init__('network_image')
+        super().__init__('network_rosbridge')
+
         # Core params
         self.declare_parameter('target', '--')
         self.declare_parameter('duration', 15)
@@ -97,7 +115,7 @@ class NetworkImageNode(Node):
         self.load = self.get_parameter('load').get_parameter_value().string_value
         self.out_dir = self.get_parameter('out').get_parameter_value().string_value
 
-        # Per-topic bandwidth monitor params
+        # Per-topic monitor params
         self.declare_parameter('topics', '')
         self.declare_parameter('types', '')
         self.declare_parameter('bw_interval', 1)
@@ -109,6 +127,16 @@ class NetworkImageNode(Node):
         if self.topic_names and (len(self.topic_names) != len(self.type_names)):
             raise ValueError("Parameter 'topics' and 'types' must have the same length.")
 
+        # rosbridge params
+        self.declare_parameter('use_rosbridge', 0)
+        self.declare_parameter('ws_host', '127.0.0.1')
+        self.declare_parameter('ws_port', 9090)
+
+        self.use_rosbridge = bool(int(self.get_parameter('use_rosbridge').get_parameter_value().integer_value))
+        self.ws_host = self.get_parameter('ws_host').get_parameter_value().string_value
+        self.ws_port = int(self.get_parameter('ws_port').get_parameter_value().integer_value)
+
+        # DDS QoS for sensors
         self.sensor_qos = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
             depth=10
@@ -117,12 +145,14 @@ class NetworkImageNode(Node):
         # Runtime fields for monitor
         self._topic_bytes: dict[str, int] = {}
         self._topic_msgs: dict[str, int] = {}
-        self._subs = []
+        self._subs = []             # DDS subscriptions
         self._bw_csv_path: Path | None = None
-        self._bw_timer = None
+        self._bw_timer = None       # DDS timer
+        self._rb_client = None      # rosbridge client
+        self._rb_topics = []        # rosbridge Topic objects
 
-    # ---------------- Per-topic bandwidth monitor -----------------
-    def _setup_topic_monitors(self, out_dir: Path):
+    # ---------------- Per-topic bandwidth monitor (DDS) -----------------
+    def _setup_topic_monitors_dds(self, out_dir: Path):
         if not self.topic_names:
             return
         self._bw_csv_path = out_dir / 'ros2_bw.csv'
@@ -135,7 +165,7 @@ class NetworkImageNode(Node):
             try:
                 MsgType = get_message(type_name)
             except Exception as e:
-                self.get_logger().error(f"Failed to load type {type_name} for {name}: {e}")
+                self.get_logger().error(f"[DDS] Failed to load type {type_name} for {name}: {e}")
                 continue
 
             def make_cb(tname: str):
@@ -150,50 +180,108 @@ class NetworkImageNode(Node):
 
             sub = self.create_subscription(MsgType, name, make_cb(name), self.sensor_qos)
             self._subs.append(sub)
-            self.get_logger().info(f"[BW] Monitoring {name} ({type_name})")
+            self.get_logger().info(f"[DDS][BW] Monitoring {name} ({type_name})")
 
         def _tick():
-            if not self._bw_csv_path:
-                return
-            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            row = {'timestamp': now}
-            for t in self.topic_names:
-                by = self._topic_bytes[t]
-                ms = self._topic_msgs[t]
-                mbps = (by * 8.0) / 1e6 / self.bw_interval if self.bw_interval > 0 else 0.0
-                hz   = ms / self.bw_interval if self.bw_interval > 0 else 0.0
-                avg  = (by / ms) if ms > 0 else 0.0
-                row[f'{t}:Mbps'] = round(mbps, 3)
-                row[f'{t}:Hz'] = round(hz, 2)
-                row[f'{t}:AvgBytes'] = int(avg)
-                # reset window
-                self._topic_bytes[t] = 0
-                self._topic_msgs[t] = 0
-
-            write_header = not self._bw_csv_path.exists()
-            with open(self._bw_csv_path, 'a', newline='') as f:
-                fieldnames = list(row.keys())
-                writer = csv.DictWriter(f, fieldnames=fieldnames)
-                if write_header:
-                    writer.writeheader()
-                writer.writerow(row)
+            self._write_bw_row()
 
         self._bw_timer = self.create_timer(float(self.bw_interval), _tick)
 
+    # ---------------- Per-topic bandwidth monitor (rosbridge) -----------
+    def _setup_topic_monitors_rosbridge(self, out_dir: Path):
+        if not self.topic_names:
+            return
+        if roslibpy is None:
+            raise RuntimeError("roslibpy not installed. `pip install roslibpy`")
+
+        self._bw_csv_path = out_dir / 'ros2_bw.csv'
+
+        for name in self.topic_names:
+            self._topic_bytes[name] = 0
+            self._topic_msgs[name] = 0
+
+        self._rb_client = roslibpy.Ros(host=self.ws_host, port=self.ws_port)
+        self._rb_client.run()
+        if not self._rb_client.is_connected:
+            raise RuntimeError(f"Cannot connect to rosbridge ws://{self.ws_host}:{self.ws_port}")
+        self.get_logger().info(f"[RB] Connected ws://{self.ws_host}:{self.ws_port}")
+
+        for name, type_name in zip(self.topic_names, self.type_names):
+            t_ros1 = ros2_to_ros1_type(type_name)
+            topic = roslibpy.Topic(self._rb_client, name, t_ros1)
+
+            def make_cb(tname: str, ttype: str):
+                def _cb(msg: dict):
+                    # payload bytes estimation
+                    by = 0
+                    try:
+                        if ttype.endswith('CompressedImage') or ttype.endswith('/CompressedImage'):
+                            by = len(base64.b64decode(msg.get('data', ''), validate=False))
+                        else:
+                            by = len(json.dumps(msg, separators=(',', ':')).encode('utf-8'))
+                    except Exception:
+                        by = 0
+                    self._topic_bytes[tname] += by
+                    self._topic_msgs[tname] += 1
+                return _cb
+
+            topic.subscribe(make_cb(name, t_ros1))
+            self._rb_topics.append(topic)
+            self.get_logger().info(f"[RB][BW] Monitoring {name} ({t_ros1})")
+
+    # ---------------- Common writer ----------------
+    def _write_bw_row(self):
+        if not self._bw_csv_path:
+            return
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        row = {'timestamp': now}
+        for t in self.topic_names:
+            by = self._topic_bytes.get(t, 0)
+            ms = self._topic_msgs.get(t, 0)
+            mbps = (by * 8.0) / 1e6 / self.bw_interval if self.bw_interval > 0 else 0.0
+            hz   = ms / self.bw_interval if self.bw_interval > 0 else 0.0
+            avg  = (by / ms) if ms > 0 else 0.0
+            row[f'{t}:Mbps'] = round(mbps, 3)
+            row[f'{t}:Hz'] = round(hz, 2)
+            row[f'{t}:AvgBytes'] = int(avg)
+            # reset window
+            self._topic_bytes[t] = 0
+            self._topic_msgs[t] = 0
+
+        # write
+        write_header = not self._bw_csv_path.exists()
+        with open(self._bw_csv_path, 'a', newline='') as f:
+            fieldnames = list(row.keys())
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            if write_header:
+                writer.writeheader()
+            writer.writerow(row)
+
     def _teardown_topic_monitors(self):
+        # DDS timer
         if self._bw_timer:
             self._bw_timer.cancel()
             self._bw_timer = None
-        # (Optionally destroy subscriptions)
+        # rosbridge topics
+        for t in self._rb_topics:
+            try:
+                t.unsubscribe()
+            except Exception:
+                pass
+        self._rb_topics.clear()
+        if self._rb_client:
+            try:
+                self._rb_client.terminate()
+            except Exception:
+                pass
+            self._rb_client = None
 
     # ------------------------------- Main -------------------------------
     def run(self):
         # Load presets for iperf3 load
-        load_map = {
-            'A': {'streams': 1, 'bandwidth': '0'},
-            'B': {'streams': 5, 'bandwidth': '2M'},
-            'C': {'streams': 5, 'bandwidth': '24M'},
-        }
+        load_map = {'A': {'streams': 1, 'bandwidth': '0'},
+                    'B': {'streams': 5, 'bandwidth': '2M'},
+                    'C': {'streams': 5, 'bandwidth': '24M'}}
         cfg = load_map.get(self.load, load_map['A'])
 
         ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -201,46 +289,52 @@ class NetworkImageNode(Node):
         base.mkdir(parents=True, exist_ok=True)
 
         start_time = time.time()
-        meta = {
-            'target': self.target,
-            'duration': self.duration,
-            'load': self.load,
-            'timestamp': ts
-        }
+        meta = {'target': self.target, 'duration': self.duration,
+                'load': self.load, 'timestamp': ts}
         meta['net_before'] = io_stats()
 
+        # External tools
         procs = []
-        # 1) Ping
         count = self.duration * 5
         ping_f = base / f"ping_{ts}.txt"
         p = Popen(['ping', '-i', '0.2', '-c', str(count), self.target], stdout=open(ping_f, 'w'), stderr=STDOUT)
         procs.append(('ping', ping_f, p))
 
-        # 2) iperf3 TCP (JSON)
         iperf_f = base / f"iperf_tcp_{ts}.json"
         cmd = ['iperf3', '-c', self.target, '-t', str(self.duration), '-P', str(cfg['streams']), '-b', cfg['bandwidth'], '-J']
         p = Popen(cmd, stdout=open(iperf_f, 'w'), stderr=STDOUT)
         procs.append(('iperf_tcp', iperf_f, p))
 
-        # 3) MTR JSON
         mtr_f = base / f"mtr_{ts}.json"
         p = Popen(['mtr', '-rwzc', '10', '-j', self.target], stdout=open(mtr_f, 'w'), stderr=STDOUT)
         procs.append(('mtr', mtr_f, p))
 
-        # ---- Start ROS 2 per-topic monitor & spin for duration ----
-        self._setup_topic_monitors(base)
-        deadline = time.time() + self.duration
-        while time.time() < deadline:
-            rclpy.spin_once(self, timeout_sec=0.1)
+        # ---- Start per-topic monitor ----
+        if self.topic_names:
+            if self.use_rosbridge:
+                self._setup_topic_monitors_rosbridge(base)
+            else:
+                self._setup_topic_monitors_dds(base)
 
-        # Ensure external tools finished (or wait if still running)
+        # ---- Spin / tick for duration ----
+        deadline = time.time() + self.duration
+        next_tick = time.time() + float(self.bw_interval)
+        while time.time() < deadline:
+            # DDS spin (fast)
+            rclpy.spin_once(self, timeout_sec=0.05)
+            # Manual tick for rosbridge mode (DDS mode用timer會自己寫)
+            if self.use_rosbridge and time.time() >= next_tick:
+                self._write_bw_row()
+                next_tick += float(self.bw_interval)
+
+        # Wait external tools
         for _, _, proc in procs:
             if proc.poll() is None:
                 proc.wait()
 
         self._teardown_topic_monitors()
 
-        # ---- Post-process ----
+        # ---- Post-process (same as原版) ----
         net_after = io_stats()
         rx = net_after['bytes_recv'] - meta['net_before']['bytes_recv']
         tx = net_after['bytes_sent'] - meta['net_before']['bytes_sent']
@@ -287,7 +381,8 @@ class NetworkImageNode(Node):
         # Flent RRUL plot
         rr = base / f"rrul_{ts}"
         try:
-            Popen(['flent', 'rrul', '-p', 'all_scaled', '-l', str(self.duration), '-s', '0.2', '--socket-stats', '-H', self.target, '-o', str(rr) + '.png']).wait()
+            Popen(['flent', 'rrul', '-p', 'all_scaled', '-l', str(self.duration), '-s', '0.2',
+                   '--socket-stats', '-H', self.target, '-o', str(rr) + '.png']).wait()
             meta['flent_plot'] = str(rr) + '.png'
         except FileNotFoundError:
             self.get_logger().warn("Flent not found; skipping RRUL plot.")

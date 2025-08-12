@@ -26,6 +26,7 @@ setup(
         'console_scripts': [
                 'network_test = network_tester.network_tester_node:main',
                 'network_image = network_tester.network_tester_image:main',
+                'network_rosbridge = network_tester.network_tester_rosbridge:main',
         ],
     },
 )

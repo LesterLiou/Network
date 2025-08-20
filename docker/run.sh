@@ -25,6 +25,9 @@ COMMON_ARGS=(
   -v "$(pwd)/..":/root/NETWORK
   --device /dev/bus/usb:/dev/bus/usb
   --privileged
+  -e DISPLAY=$DISPLAY \
+  -v /tmp/.X11-unix:/tmp/.X11-unix
+
 )
 
 # 只有在有 X Server 時才加 GUI 參數

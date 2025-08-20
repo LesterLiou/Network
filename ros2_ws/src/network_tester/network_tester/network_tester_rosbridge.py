@@ -65,6 +65,33 @@ except Exception:
     roslibpy = None
 
 
+def annotate_series_stats(ax, series, unit="", where="upper right", show_hlines=True, show_box=False):
+
+    if not series:
+        return
+    smax = max(series)
+    smin = min(series)
+    savg = sum(series) / len(series)
+
+    if show_box:
+        txt = f"Max: {smax:.3f} {unit}\nMin: {smin:.3f} {unit}\nAvg: {savg:.3f} {unit}"
+        loc_map = {
+            "upper right":  (0.98, 0.98, "right",  "top"),
+            "upper left":   (0.02, 0.98, "left",   "top"),
+            "lower right":  (0.98, 0.02, "right",  "bottom"),
+            "lower left":   (0.02, 0.02, "left",   "bottom"),
+        }
+        x, y, ha, va = loc_map.get(where, loc_map["upper right"])
+        ax.text(x, y, txt, transform=ax.transAxes, ha=ha, va=va, fontsize=9,
+                bbox=dict(boxstyle="round", facecolor="white", alpha=0.75, edgecolor="gray"))
+
+    if show_hlines:
+        ax.axhline(savg, linestyle="--", linewidth=1, alpha=0.8, label=f"Avg {savg:.3f} {unit}")
+        ax.axhline(smax, linestyle=":",  linewidth=1, alpha=0.6, label=f"Max {smax:.3f} {unit}")
+        ax.axhline(smin, linestyle=":",  linewidth=1, alpha=0.6, label=f"Min {smin:.3f} {unit}")
+        # show legend
+        ax.legend(loc="best")   # change to 'upper left' / 'upper right' is ok
+
 def io_stats():
     if psutil:
         return psutil.net_io_counters()._asdict()
@@ -387,39 +414,52 @@ class NetworkImageNode(Node):
         # Charts
         if rtts:
             plt.figure(figsize=(8,4))
-            plt.plot(rtts, label='RTT (ms)')
-            plt.xlabel('Sample'); plt.ylabel('RTT (ms)')
-            plt.title('Ping RTT Over Time'); plt.grid(); plt.legend()
-            f = base / 'chart_rtt.png'; plt.savefig(f); plt.close(); meta['chart_rtt'] = str(f)
+            ax = plt.gca()
+            ax.plot(rtts, label='RTT (ms)')
+            ax.set_xlabel('Sample'); ax.set_ylabel('RTT (ms)')
+            ax.set_title('Ping RTT Over Time'); ax.grid(True)
+            annotate_series_stats(ax, rtts, unit="ms", where="upper right", show_hlines=True)
+            f = base / 'chart_rtt.png'
+            plt.tight_layout(); plt.savefig(f); plt.close()
+            meta['chart_rtt'] = str(f)
 
             jitter = [abs(rtts[i]-rtts[i-1]) for i in range(1,len(rtts))]
             plt.figure(figsize=(8,4))
-            plt.plot(range(1,len(rtts)), jitter, label='Jitter (ms)')
-            plt.xlabel('Sample'); plt.ylabel('Jitter (ms)')
-            plt.title('RTT Jitter Over Time'); plt.grid(); plt.legend()
-            f = base / 'chart_jitter.png'; plt.savefig(f); plt.close(); meta['chart_jitter']=str(f)
+            ax = plt.gca()
+            ax.plot(range(1,len(rtts)), jitter, label='Jitter (ms)')
+            ax.set_xlabel('Sample'); ax.set_ylabel('Jitter (ms)')
+            ax.set_title('RTT Jitter Over Time'); ax.grid(True)
+            annotate_series_stats(ax, jitter, unit="ms", where="upper right", show_hlines=True)
+            f = base / 'chart_jitter.png'
+            plt.tight_layout(); plt.savefig(f); plt.close()
+            meta['chart_jitter']=str(f)
 
         if intervals:
             times = [(i['sum']['start']+i['sum']['end'])/2 for i in intervals]
-            tps = [i['sum']['bits_per_second']/1e6 for i in intervals]
+            tps = [i['sum']['bits_per_second']/1e6 for i in intervals]  # Mbps
             plt.figure(figsize=(8,4))
-            plt.plot(times, tps, label='Throughput (Mbps)')
-            plt.xlabel('Time (s)'); plt.ylabel('Throughput (Mbps)')
-            plt.title('TCP Throughput Over Time'); plt.grid(); plt.legend()
-            f = base / 'chart_throughput.png'; plt.savefig(f); plt.close(); meta['chart_throughput'] = str(f)
+            ax = plt.gca()
+            ax.plot(times, tps, label='Throughput (Mbps)')
+            ax.set_xlabel('Time (s)'); ax.set_ylabel('Throughput (Mbps)')
+            ax.set_title('TCP Throughput Over Time'); ax.grid(True)
+            annotate_series_stats(ax, tps, unit="Mbps", where="upper right", show_hlines=True)
+            f = base / 'chart_throughput.png'
+            plt.tight_layout(); plt.savefig(f); plt.close()
+            meta['chart_throughput'] = str(f)
 
         hops = meta.get('route', [])
         lats = meta.get('step_latencies_ms', [])
         if hops and lats:
             plt.figure(figsize=(10,5))
-            plt.plot(lats, marker='o')
-            plt.xticks(range(len(hops)), hops, rotation=45, ha='right')
-            plt.xlabel('Hop'); plt.ylabel('Latency (ms)')
-            plt.title('Step-wise Latency per Hop'); plt.grid()
-            f = base / 'chart_mtr.png'; plt.tight_layout(); plt.savefig(f); plt.close(); meta['chart_mtr'] = str(f)
-            meta['mtr_start_ms'] = float(lats[0]) if lats else None
-            meta['mtr_end_ms'] = float(lats[-1]) if lats else None
-            meta['mtr_diff_ms'] = round(float(lats[-1]) - float(lats[0]), 2) if len(lats) >= 2 else None
+            ax = plt.gca()
+            ax.plot(lats, marker='o')
+            ax.set_xticks(range(len(hops)))
+            ax.set_xticklabels(hops, rotation=45, ha='right')
+            ax.set_xlabel('Hop'); ax.set_ylabel('Latency (ms)')
+            ax.set_title('Step-wise Latency per Hop'); ax.grid(True)
+            annotate_series_stats(ax, lats, unit="ms", where="upper right", show_hlines=True)
+            f = base / 'chart_mtr.png'
+            plt.tight_layout(); plt.savefig(f); plt.close()
 
         # Save meta json
         (base / f'meta_{ts}.json').write_text(json.dumps(meta, indent=2))
@@ -450,11 +490,14 @@ class NetworkImageNode(Node):
                 for t in self.topic_names:
                     col = f'{t}:Mbps'
                     if col in df.columns:
+                        values = df[col].tolist()
                         plt.figure(figsize=(8,4))
-                        plt.plot(df[col])
-                        plt.xlabel('Window (#)'); plt.ylabel('Mbps')
-                        plt.title(f'Bandwidth over time - {t}')
-                        plt.grid(True)
+                        ax = plt.gca()
+                        ax.plot(values, label=f'{t} Mbps')
+                        ax.set_xlabel('Window (#)'); ax.set_ylabel('Mbps')
+                        ax.set_title(f'Bandwidth over time - {t}')
+                        ax.grid(True)
+                        annotate_series_stats(ax, values, unit="Mbps", where="upper right", show_hlines=True)
                         outp = base / f'bw_{t.replace("/", "_")}.png'
                         plt.tight_layout(); plt.savefig(outp); plt.close()
         except Exception as e:

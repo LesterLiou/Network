@@ -236,13 +236,22 @@ ros2 launch network_tester network_test.launch.py \
   load:=B
 ```
 
-**參數說明**:
-- `target`: 測試目標 IP
-- `duration`: 測試時長（秒）
-- `load`: 負載等級
-  - `A`: 輕負載（1 串流，無限制）
-  - `B`: 中負載（5 串流，2 Mbps）⭐ 推薦
-  - `C`: 重負載（5 串流，24 Mbps）
+**完整參數清單與開關說明**:
+- `target`: 測試目標 IP （必填）
+- `duration`: 測試時長（秒，預設: `30`）
+- `load`: 網路背景負載等級（預設: `B`）
+  - `A`: 輕負載（1 連線，無限制）
+  - `B`: 中負載（5 連線，2 Mbps）⭐ 推薦
+  - `C`: 重負載（5 連線，24 Mbps）
+- `skip_plots`: `1` 為跳過圖表生成（節省時間與資源），設為 `0` 可強制繪製 matplotlib 折線圖預設: `1`）
+- `skip_flent`: `1` 為跳過耗時且高負載的 Flent RRUL 緩衝區測試，設為 `0` 可強制開啟深層測驗（預設: `1`）
+- `vpn_mode`: 路由偵測模式（`auto`, `no_vpn`, `with_vpn`）（預設: `auto`）
+- `out`: 自訂檔案輸出路徑（預設: `/root/NETWORK/output`）
+- `bw_interval`: 頻寬取樣與統計的時間間隔（秒，預設: `1`）
+- `topics`: 想要監控的 ROS 2 topics 名稱（逗號分隔）
+- `types`: 該 topics 對應的 msg 型別（逗號分隔）
+- `use_rosbridge`: 設為 `1` 則透過 ROSbridge (WebSocket) 取代 DDS 監控（預設: `0`）
+- `ws_host` / `ws_port`: 手動指定 ROSbridge 的 websocket 主機與埠號
 
 ---
 
@@ -578,7 +587,8 @@ ros2 launch network_tester network_test.launch.py \
   duration:=60 \              # 更長的測試時間
   load:=C \                   # 高負載
   bw_interval:=0.5 \          # 更頻繁的頻寬採樣
-  skip_plots:=1 \             # 跳過圖表生成（加快速度）
+  skip_plots:=0 \             # 強制將所有結果畫成圖表 (預設: 1 - 關閉)
+  skip_flent:=0 \             # 強制開啟 Bufferbloat 的 Flent 測驗 (預設: 1 - 關閉)
   out:=/custom/output/path    # 自訂輸出目錄
 ```
 

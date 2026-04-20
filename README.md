@@ -184,13 +184,22 @@ ros2 launch network_tester network_test.launch.py \
   load:=B
 ```
 
-**Parameter Explanation**:
-- `target`: Test target IP
-- `duration`: Test duration (seconds)
-- `load`: Load level
+**Full Parameter List**:
+- `target`: Test target IP (Required)
+- `duration`: Test duration in seconds (Default: `30`)
+- `load`: Target traffic load level (Default: `B`)
   - `A`: Light load (1 stream, unlimited)
   - `B`: Medium load (5 streams, 2 Mbps)
   - `C`: Heavy load (5 streams, 24 Mbps)
+- `skip_plots`: Set to `0` to generate matplotlib charts, `1` to skip and save time/resources (Default: `1`)
+- `skip_flent`: Set to `0` to run the deep Flent RRUL Bufferbloat test, `1` to skip (Default: `1`)
+- `vpn_mode`: Network routing mode (`no_vpn`, `with_vpn`, `auto`) (Default: `auto`)
+- `out`: Specific output directory path (Default: `/root/NETWORK/output`)
+- `bw_interval`: Statistics sampling interval in seconds (Default: `1`)
+- `topics`: Comma-separated ROS 2 topics to monitor
+- `types`: Comma-separated ROS 2 message types corresponding to `topics`
+- `use_rosbridge`: Set to `1` to monitor via ROSbridge WebSocket instead of DDS (Default: `0`)
+- `ws_host` / `ws_port`: ROSbridge server address and port
 
 ---
 
@@ -491,7 +500,8 @@ ros2 launch network_tester network_test.launch.py \
   duration:=60 \              # Longer test duration
   load:=C \                   # Heavy load
   bw_interval:=0.5 \          # More frequent bandwidth sampling
-  skip_plots:=1 \             # Skip chart generation (faster)
+  skip_plots:=0 \             # Force chart generation (Default: 1 - skip)
+  skip_flent:=0 \             # Force comprehensive Flent RRUL test (Default: 1 - skip)
   out:=/custom/output/path    # Custom output directory
 ```
 

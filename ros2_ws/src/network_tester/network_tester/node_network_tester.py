@@ -60,6 +60,7 @@ class NetworkTestNode(Node):
         self.declare_parameter('types', '')
         self.declare_parameter('bw_interval', 1)
         self.declare_parameter('skip_plots', 0)
+        self.declare_parameter('skip_flent', 0)
         
         # ROSbridge 参数
         self.declare_parameter('use_rosbridge', 0)
@@ -74,6 +75,7 @@ class NetworkTestNode(Node):
         self.vpn_mode = self.get_parameter('vpn_mode').get_parameter_value().string_value
         self.bw_interval = int(self.get_parameter('bw_interval').get_parameter_value().integer_value)
         self.skip_plots = bool(int(self.get_parameter('skip_plots').get_parameter_value().integer_value))
+        self.skip_flent = bool(int(self.get_parameter('skip_flent').get_parameter_value().integer_value))
         
         # ROSbridge 参数
         self.use_rosbridge = bool(int(self.get_parameter('use_rosbridge').get_parameter_value().integer_value))
@@ -303,7 +305,7 @@ class NetworkTestNode(Node):
         # ========================================================================
         # 步驟 6: Flent RRUL 測試
         # ========================================================================
-        if not self.skip_plots:
+        if not self.skip_flent:
             self.get_logger().info("🌐 Running Flent RRUL test...")
             
             # 創建 image 目錄（如果還沒創建）

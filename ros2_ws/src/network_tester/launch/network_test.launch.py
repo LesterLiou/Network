@@ -72,6 +72,11 @@ def generate_launch_description():
             description='跳過圖表生成 (0|1)'
         ),
         DeclareLaunchArgument(
+            'skip_flent',
+            default_value='1',
+            description='跳過 Bufferbloat Flent RRUL 測試 (0|1)'
+        ),
+        DeclareLaunchArgument(
             'use_rosbridge',
             default_value='0',
             description='使用 ROSbridge 而非 DDS (0|1)'
@@ -103,6 +108,7 @@ def generate_launch_description():
                 'types': LaunchConfiguration('types'),
                 'bw_interval': LaunchConfiguration('bw_interval'),
                 'skip_plots': LaunchConfiguration('skip_plots'),
+                'skip_flent': LaunchConfiguration('skip_flent'),
                 'use_rosbridge': LaunchConfiguration('use_rosbridge'),
                 'ws_host': LaunchConfiguration('ws_host'),
                 'ws_port': LaunchConfiguration('ws_port'),

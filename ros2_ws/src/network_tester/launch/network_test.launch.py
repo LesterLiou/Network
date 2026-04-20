@@ -68,7 +68,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'skip_plots',
-            default_value='1',
+            default_value='0',
             description='跳過圖表生成 (0|1)'
         ),
         DeclareLaunchArgument(

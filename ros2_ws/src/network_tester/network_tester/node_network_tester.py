@@ -303,16 +303,17 @@ class NetworkTestNode(Node):
         # ========================================================================
         # 步驟 6: Flent RRUL 測試
         # ========================================================================
-        self.get_logger().info("🌐 Running Flent RRUL test...")
-        
-        # 創建 image 目錄（如果還沒創建）
-        image_dir = base / 'image'
-        image_dir.mkdir(exist_ok=True)
-        
-        flent_tool = FlentTool(self.target, self.duration, self.get_logger())
-        flent_base = image_dir / f"rrul_{ts}"
-        if flent_tool.run(flent_base):
-            meta['flent_plot'] = str(flent_base) + '.png'
+        if not self.skip_plots:
+            self.get_logger().info("🌐 Running Flent RRUL test...")
+            
+            # 創建 image 目錄（如果還沒創建）
+            image_dir = base / 'image'
+            image_dir.mkdir(exist_ok=True)
+            
+            flent_tool = FlentTool(self.target, self.duration, self.get_logger())
+            flent_base = image_dir / f"rrul_{ts}"
+            if flent_tool.run(flent_base):
+                meta['flent_plot'] = str(flent_base) + '.png'
         
         # ========================================================================
         # 步驟 7: 生成圖表

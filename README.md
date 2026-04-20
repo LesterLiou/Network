@@ -36,6 +36,12 @@
 - ✅ **Automatic QoS**: Best Effort configuration for sensor data
 - ✅ **DDS or ROSbridge**: Support for both communication methods
 
+### Standalone Analysis Scripts (in `script/` directory)
+- ✅ **DDS Performance Analysis** (`dds_network_logger.py`): Log and plot DDS topic FPS and bandwidth line charts, allowing you to specify expected FPS for streaming analysis.
+- ✅ **Latency & Jitter Measurement** (`dds_sub_image.py`): Subscription-based latency and jitter measurement specifically tailored for high-bandwidth data like image packets.
+- ✅ **Pure Python Network Stress Test** (`network_test_TCP.py` / `network_test_ind.py` / `network_test_syn.py`): 
+  Without depending on ROS 2, these standalone python scripts execute parallel Ping, iperf3 (TCP/UDP), MTR, and Bufferbloat tests for early debugging.
+
 ### Automation & Analysis
 - ✅ **VPN Auto-Detection**: Intelligent VPN connection detection
 - ✅ **Chart Generation**: Auto-generate RTT, throughput, route charts
@@ -435,6 +441,42 @@ cat iperf_tcp_*.json | jq '.end.sum_received.bits_per_second / 1000000'
 
 # View charts
 ls image/*.png
+```
+
+---
+
+## ⚡ Standalone Python Scripts Testing (in `script/` directory)
+
+If you just need a single tool, or don't want to build the entire ROS 2 workspace, you can safely rely on the lightweight, powerful scripts located in the `script/` directory:
+
+### 1. Pure DDS/ROS 2 Topic Bandwidth & FPS Monitor (`dds_network_logger.py`)
+This standalone script can observe a single topic and tally up the bytes and messages every second. When testing finishes, it **automatically plots a beautiful line chart and outputs CSV**:
+
+```bash
+cd /root/NETWORK/script
+python3 dds_network_logger.py \
+  --topic /camera/camera/color/image_raw/compressed \
+  --duration 30 \
+  --expected-fps 15.0
+```
+- **Scenario**: Curing frame drops and diagnosing video latency via visual comparison with `expected-fps`.
+
+### 2. Pure DDS/ROS 2 Latency & Jitter Analysis (`dds_sub_image.py`)
+It specifically measures transmission latency and jitter using embedded message timestamps and outputs useful graphs, giving a high-frequency look into the network queue.
+
+```bash
+cd /root/NETWORK/script
+python3 dds_sub_image.py
+```
+
+### 3. Pure Network Stress Testing without ROS (`network_test_TCP.py` etc.)
+Generate quick TCP/UDP/latency benchmarks with iperf3, ping, and MTR on a raw IP addressing layer directly over Python. Perfect for baseline tests without DDS running.
+
+```bash
+sudo python3 script/network_test_TCP.py \
+  --target 192.168.0.230 \
+  --duration 15 \
+  --load B
 ```
 
 ---

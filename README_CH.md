@@ -36,6 +36,11 @@
 - ✅ **自動 QoS**: Best Effort 設定適用感測器數據
 - ✅ **DDS 或 ROSbridge**: 支援兩種通訊方式
 
+### 獨立分析腳本 (位於 `script/` 目錄)
+- ✅ **DDS 獨立效能分析** (`dds_network_logger.py`): 精準量測並繪製 DDS 話題的 FPS 與頻寬折線圖，並可指定預期 FPS。
+- ✅ **DDS 單一節點延遲量測** (`dds_sub_image.py`): 針對影像封包等高頻寬資料的單點訂閱與延遲/抖動 (Jitter) 分析。
+- ✅ **純 Python 網路壓力測試** (`network_test_TCP.py` / `network_test_ind.py` / `network_test_syn.py`): 在無需啟動 ROS 2 環境下，利用 Python 腳本快速執行平行或同步的 Ping, iperf3 (TCP/UDP), MTR 與 Bufferbloat 等連線測試，方便早期排錯。
+
 ### 自動化與分析
 - ✅ **VPN 自動偵測**: 智能判斷是否透過 VPN 連線
 - ✅ **圖表生成**: 自動生成 RTT、吞吐量、路由圖表
@@ -522,6 +527,43 @@ cat iperf_tcp_*.json | jq '.end.sum_received.bits_per_second / 1000000'
 
 # 查看圖表
 ls image/*.png
+```
+
+---
+
+## ⚡ 獨立 Python 腳本測試 (位於 `script/` 目錄)
+
+如果你只需要單一工具，或是專注於排查特定 ROS Topic 效能，可以使用 `script/` 目錄中的強大獨立腳本：
+
+### 1. 純 DDS/ROS 2 Topic 頻寬與 FPS 監控 (`dds_network_logger.py`)
+這是一個不需要啟動完整測試框架就能使用的輕量級腳本，專門用來訂閱一個 Topic，並每秒統計一次資料接收量與 FPS。執行完畢**會自動繪出漂亮的折線圖並輸出 CSV**:
+
+```bash
+cd /root/NETWORK/script
+python3 dds_network_logger.py \
+  --topic /camera/camera/color/image_raw/compressed \
+  --duration 30 \
+  --expected-fps 15.0
+```
+- **適用場景**：專治掉幀與影像延遲，藉由 `expected-fps` 對比實際達到的 FPS 波動。
+
+### 2. DDS/ROS 2 Latency 與 Jitter 分析 (`dds_sub_image.py`)
+針對攜帶 header timestamp (如影像、光達) 的高頻寬 ROS 2 訊息，它能測量傳遞延遲與抖動 (Jitter) 並保存分析圖與日誌檔案 (`dds_latency_plot.png`)。
+
+```bash
+cd /root/NETWORK/script
+python3 dds_sub_image.py
+```
+
+### 3. 無 ROS 依賴的純網路壓力測試 (`network_test_TCP.py` 等)
+直接利用 Python 調用原生的 iperf3, ping, MTR 指令來生成圖表。這在你想要測試基礎網路拓撲狀況而不需要 ROS 2 環境參與時非常好用。
+
+```bash
+cd /root/NETWORK/script
+sudo python3 network_test_TCP.py \
+  --target 192.168.0.230 \
+  --duration 15 \
+  --load B
 ```
 
 ---

@@ -3,8 +3,20 @@ set -euo pipefail
 
 IMAGE_NAME=${IMAGE_NAME:-hrcnthu/flent_network:latest}
 CONTAINER_NAME=${CONTAINER_NAME:-flent_network_container}
-MODE=${1:-bash}
+
+MODE="bash"
 ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+
+if [[ $# -eq 1 ]]; then
+  if [[ "$1" =~ ^[0-9]+$ ]]; then
+    ROS_DOMAIN_ID="$1"
+  else
+    MODE="$1"
+  fi
+elif [[ $# -ge 2 ]]; then
+  MODE="$1"
+  ROS_DOMAIN_ID="$2"
+fi
 
 echo "[INFO] Pulling the latest image: ${IMAGE_NAME}"
 docker pull "${IMAGE_NAME}"
@@ -44,6 +56,6 @@ if [[ "${MODE}" == "bash" ]]; then
 elif [[ "${MODE}" == "rosbridge" ]]; then
   exec docker run -it "${COMMON_ARGS[@]}" "${IMAGE_NAME}" /usr/local/bin/start_rosbridge.sh
 else
-  echo "Usage: $0 [bash|rosbridge]"
+  echo "Usage: $0 [bash|rosbridge] [ROS_DOMAIN_ID] or $0 [ROS_DOMAIN_ID]"
   exit 1
 fi
